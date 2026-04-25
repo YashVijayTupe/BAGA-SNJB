@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Send, Loader2, AlertCircle, Sparkles, MapPin } from "lucide-react";
+import { Send, Loader2, AlertCircle, Sparkles, MapPin, Mic, MicOff } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { useEffect, useRef } from "react";
 import type { ComplaintResult } from "@/app/page";
 import { db } from "@/lib/firebase";
 import { collection, addDoc } from "firebase/firestore";
@@ -21,15 +23,104 @@ interface Props {
 }
 
 export default function ComplaintForm({ onSubmit }: Props) {
+  const { t, i18n } = useTranslation();
   const { user, profile } = useAuth();
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clarificationQuestion, setClarificationQuestion] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    // Initialize Speech Recognition
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      console.warn("Speech recognition NOT supported in this browser.");
+      return;
+    }
+
+    try {
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+
+      recognitionRef.current.onstart = () => {
+        console.log("Speech recognition started");
+        setIsListening(true);
+      };
+
+      recognitionRef.current.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        console.log("Speech result received:", transcript);
+        setText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        console.error("Speech recognition error:", event.error);
+        setIsListening(false);
+        
+        if (event.error === 'not-allowed') {
+          setError("Microphone access denied. Please click the lock icon in your browser address bar and allow microphone access.");
+        } else if (event.error === 'network') {
+          setError("Network error. Speech recognition requires an active internet connection.");
+        } else if (event.error === 'no-speech') {
+          // Ignore no-speech errors to avoid annoying the user
+          console.log("No speech detected.");
+        } else {
+          setError(`Speech Error: ${event.error}. Please try again.`);
+        }
+      };
+
+      recognitionRef.current.onend = () => {
+        console.log("Speech recognition ended");
+        setIsListening(false);
+      };
+    } catch (e) {
+      console.error("Failed to initialize Speech Recognition:", e);
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch(e) {}
+      }
+    };
+  }, []);
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) {
+      setError("Speech recognition is not supported in this browser.");
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+    } else {
+      setError(null);
+      // Set language based on i18n
+      const langMap: Record<string, string> = {
+        en: "en-IN",
+        hi: "hi-IN",
+        mr: "mr-IN"
+      };
+      recognitionRef.current.lang = langMap[i18n.language] || "en-IN";
+      
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (e) {
+        console.error("Failed to start recognition:", e);
+      }
+    }
+  };
 
   const handleSubmit = async () => {
     if (!text.trim() || text.trim().length < 10) {
-      setError("Please provide at least 10 characters describing your issue.");
+      setError(t("describe_issue"));
       return;
     }
 
@@ -97,13 +188,13 @@ export default function ComplaintForm({ onSubmit }: Props) {
             <Sparkles className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold">File a Complaint</h3>
+            <h3 className="text-lg font-semibold">{t("file_complaint")}</h3>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-[10px] bg-saffron-500/10 text-saffron-600 px-1.5 py-0.5 rounded border border-saffron-500/20 font-medium uppercase tracking-wider">
                 {profile?.city}, {profile?.district}
               </span>
               <p className="text-xs text-muted-foreground">
-                Verified Jurisdiction
+                {t("verified_jurisdiction")}
               </p>
             </div>
           </div>
@@ -120,25 +211,43 @@ export default function ComplaintForm({ onSubmit }: Props) {
         )}
 
         {/* Textarea */}
-        <div className="relative">
+        <div className="relative group">
           <textarea
             id="complaint-input"
             value={text}
             onChange={(e) => { setText(e.target.value); setError(null); setClarificationQuestion(null); }}
-            placeholder="Describe your civic complaint here... e.g. 'Hamare area mein paani nahi aa raha hai subah se'"
+            placeholder={t("describe_issue")}
             rows={5}
             disabled={loading}
-            className="w-full resize-none rounded-xl bg-secondary/50 border border-border/50 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-saffron-500/40 focus:border-saffron-500/40 transition-all disabled:opacity-50"
+            className={`w-full resize-none rounded-xl bg-secondary/50 border px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 transition-all disabled:opacity-50 ${
+              isListening 
+                ? "border-red-500/50 ring-2 ring-red-500/20" 
+                : "border-border/50 focus:ring-saffron-500/40 focus:border-saffron-500/40"
+            }`}
           />
-          <div className="absolute bottom-3 right-3 text-xs text-muted-foreground/50">
-            {text.length} chars
+          
+          {/* Mic Button */}
+          <button
+            onClick={toggleListening}
+            title={isListening ? "Stop listening" : "Speak your complaint"}
+            className={`absolute top-3 right-3 p-2 rounded-lg transition-all duration-300 ${
+              isListening 
+                ? "bg-red-500 text-white animate-pulse" 
+                : "bg-secondary text-muted-foreground hover:text-saffron-500 hover:bg-saffron-500/10 border border-border/50"
+            }`}
+          >
+            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+          </button>
+
+          <div className="absolute bottom-3 right-3 text-[10px] font-mono text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors">
+            {text.length} chars {isListening && <span className="ml-2 text-red-400 font-bold animate-pulse">LISTENING...</span>}
           </div>
         </div>
 
         {/* Example complaints */}
         <div className="mt-4">
           <p className="text-xs text-muted-foreground mb-2">
-            💡 Try an example:
+            💡 {t("try_example")}
           </p>
           <div className="flex flex-wrap gap-2">
             {EXAMPLE_COMPLAINTS.map((ex, i) => (
@@ -181,12 +290,12 @@ export default function ComplaintForm({ onSubmit }: Props) {
           {loading ? (
             <>
               <Loader2 className="w-5 h-5 spinner" />
-              AI is analyzing your complaint...
+              {t("submitting")}
             </>
           ) : (
             <>
               <Send className="w-4 h-4" />
-              Submit & Route via AI
+              {t("submit_route")}
             </>
           )}
         </button>

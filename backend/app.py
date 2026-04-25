@@ -395,8 +395,9 @@ def process_complaint():
 # ─────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    port = int(os.getenv("FLASK_PORT", 5000))
-    debug = os.getenv("FLASK_DEBUG", "true").lower() == "true"
+    # Use 'PORT' if available (standard for Cloud providers), else fallback to 'FLASK_PORT' or 5000
+    port = int(os.getenv("PORT", os.getenv("FLASK_PORT", 5000)))
+    debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
 
     print("=" * 60)
     print("  BAGA Backend - Bharat Autonomous Governance Agent")

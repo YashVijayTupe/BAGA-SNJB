@@ -1,13 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  async rewrites() {
-    return [
-      {
-        source: "/api/flask/:path*",
-        destination: "http://localhost:5001/:path*",
-      },
-    ];
+  output: 'export',
+  images: {
+    unoptimized: true, // Required for static export
   },
 };
 

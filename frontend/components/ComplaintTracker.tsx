@@ -9,6 +9,7 @@ import {
   CheckCircle2, ArrowRight, Zap, FileText,
   ShieldAlert, Send, X, Flame,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { ComplaintResult } from "@/app/page";
 
 // ─── Style helpers ───────────────────────────────────────────
@@ -19,15 +20,21 @@ const priorityStyles: Record<string, string> = {
   Low: "badge-low",
 };
 
-const statusSteps = [
-  { key: "Pending",     label: "Submitted",   icon: FileText },
-  { key: "Routed",      label: "AI Routed",   icon: Zap },
-  { key: "In-Progress", label: "In Progress", icon: ArrowRight },
-  { key: "Resolved",    label: "Resolved",    icon: CheckCircle2 },
+const getStatusSteps = (t: any) => [
+  { key: "Pending",     label: t("status_submitted"),   icon: FileText },
+  { key: "Routed",      label: t("status_routed"),      icon: Zap },
+  { key: "In-Progress", label: t("status_in_progress"), icon: ArrowRight },
+  { key: "Resolved",    label: t("status_resolved"),    icon: CheckCircle2 },
 ];
 
 function getStatusIndex(status: string): number {
-  const idx = statusSteps.findIndex((s) => s.key === status);
+  const steps = [
+    { key: "Pending" },
+    { key: "Routed" },
+    { key: "In-Progress" },
+    { key: "Resolved" },
+  ];
+  const idx = steps.findIndex((s) => s.key === status);
   return idx >= 0 ? idx : 1;
 }
 
@@ -63,6 +70,7 @@ function getTimeLabel(c: ComplaintResult): string {
 interface Props { complaints: ComplaintResult[]; }
 
 export default function ComplaintTracker({ complaints }: Props) {
+  const { t } = useTranslation();
   const [modalTarget, setModalTarget] = useState<ComplaintResult | null>(null);
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
 
@@ -72,9 +80,9 @@ export default function ComplaintTracker({ complaints }: Props) {
         <div className="w-16 h-16 rounded-2xl bg-secondary/50 flex items-center justify-center mx-auto mb-4">
           <FileText className="w-8 h-8 text-muted-foreground/50" />
         </div>
-        <h3 className="text-lg font-semibold mb-2">No Complaints Yet</h3>
+        <h3 className="text-lg font-semibold mb-2">{t("no_complaints")}</h3>
         <p className="text-sm text-muted-foreground">
-          Submit your first complaint to see AI routing and tracking here.
+          {t("no_complaints_desc")}
         </p>
       </div>
     );
@@ -119,9 +127,18 @@ function ComplaintCard({
   alreadyReported: boolean;
   onReport: () => void;
 }) {
+  const { t } = useTranslation();
   const currentStep = getStatusIndex(c.status);
+  const statusSteps = getStatusSteps(t);
   const breached = isSLABreached(c);
   const timeLabel = getTimeLabel(c);
+
+  const priorityLabels: Record<string, string> = {
+    Critical: t("priority_critical"),
+    High: t("priority_high"),
+    Medium: t("priority_medium"),
+    Low: t("priority_low"),
+  };
 
   return (
     <div
@@ -137,12 +154,12 @@ function ComplaintCard({
         <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5 mb-4 flex-wrap">
           <Flame className="w-4 h-4 text-red-400 shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-red-400">SLA BREACH — Resolution Deadline Exceeded</p>
+            <p className="text-xs font-semibold text-red-400">{t("sla_breach")} — {t("deadline_exceeded")}</p>
             <p className="text-[10px] text-red-400/70">{timeLabel}</p>
           </div>
           {alreadyReported ? (
             <span className="text-[10px] bg-orange-500/15 text-orange-400 px-3 py-1 rounded-full font-semibold border border-orange-500/20">
-              ⚠ Complaint Filed
+              ⚠ {t("already_reported")}
             </span>
           ) : (
             <button
@@ -150,7 +167,7 @@ function ComplaintCard({
               className="flex items-center gap-1.5 text-[11px] font-semibold bg-red-500/20 text-red-400 hover:bg-red-500/30 px-3 py-1.5 rounded-lg transition-all border border-red-500/30"
             >
               <ShieldAlert className="w-3.5 h-3.5" />
-              File Against Officer
+              {t("report_officer")}
             </button>
           )}
         </div>
@@ -163,7 +180,7 @@ function ComplaintCard({
             {c.id}
           </span>
           <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${priorityStyles[c.priority_level] || "badge-medium"}`}>
-            {c.priority_level}
+            {priorityLabels[c.priority_level] || c.priority_level}
           </span>
         </div>
         <span className="text-xs text-muted-foreground">
@@ -178,10 +195,10 @@ function ComplaintCard({
 
       {/* AI Routing Info */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-        <InfoCard icon={<AlertTriangle className="w-4 h-4 text-saffron-400" />} label="Issue Category" value={c.issue_category} />
-        <InfoCard icon={<MapPin className="w-4 h-4 text-blue-400" />}          label="Jurisdiction"    value={c.jurisdiction_level} />
-        <InfoCard icon={<Building2 className="w-4 h-4 text-emerald-400" />}   label="Department"      value={c.assigned_department} />
-        <InfoCard icon={<User className="w-4 h-4 text-purple-400" />}         label="Officer Title"   value={c.officer_title} />
+        <InfoCard icon={<AlertTriangle className="w-4 h-4 text-saffron-400" />} label={t("issue_category")} value={c.issue_category} />
+        <InfoCard icon={<MapPin className="w-4 h-4 text-blue-400" />}          label={t("jurisdiction")}    value={c.jurisdiction_level} />
+        <InfoCard icon={<Building2 className="w-4 h-4 text-emerald-400" />}   label={t("department")}      value={c.assigned_department} />
+        <InfoCard icon={<User className="w-4 h-4 text-purple-400" />}         label={t("officer_title")}   value={c.officer_title} />
       </div>
 
       {/* Time Widget */}
@@ -192,7 +209,7 @@ function ComplaintCard({
       }`}>
         <Clock className={`w-5 h-5 shrink-0 ${breached ? "text-red-400" : "text-saffron-400"}`} />
         <div className="flex-1">
-          <p className="text-xs text-muted-foreground">ML Predicted Resolution</p>
+          <p className="text-xs text-muted-foreground">{t("ml_prediction")}</p>
           <p className={`text-base font-bold ${breached ? "text-red-400" : "text-foreground"}`}>
             {c.predicted_hours < 24
               ? `${c.predicted_hours}h`
@@ -201,7 +218,7 @@ function ComplaintCard({
           </p>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-[10px] text-muted-foreground mb-0.5">Time Status</p>
+          <p className="text-[10px] text-muted-foreground mb-0.5">{t("time_status")}</p>
           <p className={`text-xs font-semibold ${breached ? "text-red-400" : "text-emerald-400"}`}>
             {timeLabel}
           </p>
